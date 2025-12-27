@@ -1,0 +1,504 @@
+import gradio as gr
+import json
+import os
+from datetime import datetime
+import hashlib
+
+
+
+class DatabaseManager:
+    """Handles all data persistence operations"""
+    
+    def __init__(self):
+        self.users_file = "users_db.json"
+        self.tasks_file = "tasks_db.json"
+        self.initialize_database()
+    
+    def initialize_database(self):
+        """Create database files if they don't exist"""
+        if not os.path.exists(self.users_file):
+            with open(self.users_file, 'w') as f:
+                json.dump({}, f)
+        
+        if not os.path.exists(self.tasks_file):
+            with open(self.tasks_file, 'w') as f:
+                json.dump({}, f)
+    
+    def hash_password(self, password):
+        """Secure password hashing"""
+        return hashlib.sha256(password.encode()).hexdigest()
+    
+    def register_user(self, username, password):
+        """Register new user"""
+        with open(self.users_file, 'r') as f:
+            users = json.load(f)
+        
+        if username in users:
+            return False, "❌ Username already exists!"
+        
+        users[username] = {
+            "password": self.hash_password(password),
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+        
+        with open(self.users_file, 'w') as f:
+            json.dump(users, f, indent=2)
+        
+        
+        with open(self.tasks_file, 'r') as f:
+            tasks = json.load(f)
+        tasks[username] = []
+        with open(self.tasks_file, 'w') as f:
+            json.dump(tasks, f, indent=2)
+        
+        return True, "✅ Account created successfully!"
+    
+    def authenticate_user(self, username, password):
+        """Verify user credentials"""
+        with open(self.users_file, 'r') as f:
+            users = json.load(f)
+        
+        if username not in users:
+            return False, "❌ Username not found!"
+        
+        if users[username]["password"] != self.hash_password(password):
+            return False, "❌ Incorrect password!"
+        
+        return True, "✅ Login successful!"
+    
+    def get_user_tasks(self, username):
+        """Retrieve all tasks for a user"""
+        with open(self.tasks_file, 'r') as f:
+            tasks = json.load(f)
+        
+        return tasks.get(username, [])
+    
+    def add_task(self, username, task_data):
+        """Add new task"""
+        with open(self.tasks_file, 'r') as f:
+            tasks = json.load(f)
+        
+        if username not in tasks:
+            tasks[username] = []
+        
+        task_id = len(tasks[username]) + 1
+        task_data["id"] = task_id
+        task_data["created_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        task_data["status"] = "Pending"
+        
+        tasks[username].append(task_data)
+        
+        with open(self.tasks_file, 'w') as f:
+            json.dump(tasks, f, indent=2)
+        
+        return True, "✅ Task added successfully!"
+    
+    def update_task(self, username, task_id, updated_data):
+        """Update existing task"""
+        with open(self.tasks_file, 'r') as f:
+            tasks = json.load(f)
+        
+        user_tasks = tasks.get(username, [])
+        
+        for task in user_tasks:
+            if task["id"] == task_id:
+                task.update(updated_data)
+                task["updated_at"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                break
+        
+        tasks[username] = user_tasks
+        
+        with open(self.tasks_file, 'w') as f:
+            json.dump(tasks, f, indent=2)
+        
+        return True, "✅ Task updated successfully!"
+    
+    def delete_task(self, username, task_id):
+        """Delete task"""
+        with open(self.tasks_file, 'r') as f:
+            tasks = json.load(f)
+        
+        user_tasks = tasks.get(username, [])
+        tasks[username] = [task for task in user_tasks if task["id"] != task_id]
+        
+        with open(self.tasks_file, 'w') as f:
+            json.dump(tasks, f, indent=2)
+        
+        return True, "✅ Task deleted successfully!"
+    
+    def mark_task_complete(self, username, task_id):
+        """Mark task as completed"""
+        return self.update_task(username, task_id, {"status": "Completed"})
+
+
+
+db = DatabaseManager()
+current_user = {"username": None, "logged_in": False}
+
+
+def signup_user(username, password, confirm_password):
+    """Handle user registration"""
+    if not username or not password:
+        return "❌ Please fill all fields!", gr.update(), gr.update(), gr.update()
+    
+    if len(username) < 3:
+        return "❌ Username must be at least 3 characters!", gr.update(), gr.update(), gr.update()
+    
+    if len(password) < 6:
+        return "❌ Password must be at least 6 characters!", gr.update(), gr.update(), gr.update()
+    
+    if password != confirm_password:
+        return "❌ Passwords do not match!", gr.update(), gr.update(), gr.update()
+    
+    success, message = db.register_user(username, password)
+    
+    if success:
+        return message, gr.update(visible=True), gr.update(visible=False), gr.update(visible=False)
+    else:
+        return message, gr.update(), gr.update(), gr.update()
+
+def login_user(username, password):
+    """Handle user login"""
+    if not username or not password:
+        return "❌ Please enter username and password!", gr.update(), gr.update(), gr.update()
+    
+    success, message = db.authenticate_user(username, password)
+    
+    if success:
+        current_user["username"] = username
+        current_user["logged_in"] = True
+        return message, gr.update(visible=False), gr.update(visible=False), gr.update(visible=True)
+    else:
+        return message, gr.update(), gr.update(), gr.update()
+
+def logout_user():
+    """Handle user logout"""
+    current_user["username"] = None
+    current_user["logged_in"] = False
+    return gr.update(visible=True), gr.update(visible=False), gr.update(visible=False), "👋 Logged out successfully!"
+
+
+
+def format_tasks_display():
+    """Format tasks for display in dashboard"""
+    if not current_user["logged_in"]:
+        return "⚠️ Please login first!"
+    
+    tasks = db.get_user_tasks(current_user["username"])
+    
+    if not tasks:
+        return "📝 No tasks yet! Add your first task below."
+    
+    display = f"### 📋 Your Tasks ({len(tasks)} total)\n\n"
+    
+    for task in tasks:
+        status_emoji = "✅" if task["status"] == "Completed" else "⏳"
+        priority_emoji = {"High": "🔴", "Medium": "🟡", "Low": "🟢"}.get(task.get("priority", "Medium"), "⚪")
+        
+        display += f"""
+**{status_emoji} Task #{task['id']}** {priority_emoji}
+- **Title:** {task['title']}
+- **Description:** {task['description']}
+- **Category:** {task.get('category', 'General')}
+- **Priority:** {task.get('priority', 'Medium')}
+- **Due Date:** {task.get('due_date', 'No date set')}
+- **Status:** {task['status']}
+- **Created:** {task['created_at']}
+
+---
+"""
+    
+    return display
+
+def add_new_task(title, description, category, priority, due_date):
+    """Add new task to database"""
+    if not current_user["logged_in"]:
+        return "❌ Please login first!", gr.update()
+    
+    if not title:
+        return "❌ Task title is required!", gr.update()
+    
+    task_data = {
+        "title": title,
+        "description": description or "No description",
+        "category": category,
+        "priority": priority,
+        "due_date": due_date or "No date set"
+    }
+    
+    success, message = db.add_task(current_user["username"], task_data)
+    
+    if success:
+        return message, format_tasks_display()
+    else:
+        return message, gr.update()
+
+def delete_task_by_id(task_id):
+    """Delete task by ID"""
+    if not current_user["logged_in"]:
+        return "❌ Please login first!", gr.update()
+    
+    if not task_id:
+        return "❌ Please enter a task ID!", gr.update()
+    
+    try:
+        task_id = int(task_id)
+    except ValueError:
+        return "❌ Invalid task ID! Please enter a number.", gr.update()
+    
+    success, message = db.delete_task(current_user["username"], task_id)
+    
+    if success:
+        return message, format_tasks_display()
+    else:
+        return message, gr.update()
+
+def mark_task_as_complete(task_id):
+    """Mark task as completed"""
+    if not current_user["logged_in"]:
+        return "❌ Please login first!", gr.update()
+    
+    if not task_id:
+        return "❌ Please enter a task ID!", gr.update()
+    
+    try:
+        task_id = int(task_id)
+    except ValueError:
+        return "❌ Invalid task ID! Please enter a number.", gr.update()
+    
+    success, message = db.mark_task_complete(current_user["username"], task_id)
+    
+    if success:
+        return message, format_tasks_display()
+    else:
+        return message, gr.update()
+
+def refresh_tasks():
+    """Refresh task display"""
+    return format_tasks_display()
+
+
+
+def create_app():
+    """Create the complete Gradio interface"""
+    
+    with gr.Blocks(
+        theme=gr.themes.Soft(
+            primary_hue="blue",
+            secondary_hue="cyan",
+        ),
+        css="""
+            .container {max-width: 800px; margin: auto;}
+            .header {text-align: center; padding: 20px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 10px; margin-bottom: 20px;}
+            .card {background: white; padding: 20px; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); margin: 10px 0;}
+        """,
+        title="📱 Smart To-Do App"
+    ) as app:
+        
+       
+        gr.HTML("""
+            <div class="header">
+                <h1>📱 Smart To-Do App</h1>
+                <p>Manage Your Tasks Efficiently | Internship Project</p>
+            </div>
+        """)
+        
+        
+        
+        with gr.Column(visible=True) as login_page:
+            gr.Markdown("## 🔐 Login to Your Account")
+            
+            with gr.Row():
+                login_username = gr.Textbox(
+                    label="👤 Username",
+                    placeholder="Enter your username",
+                    scale=2
+                )
+            
+            with gr.Row():
+                login_password = gr.Textbox(
+                    label="🔒 Password",
+                    placeholder="Enter your password",
+                    type="password",
+                    scale=2
+                )
+            
+            login_message = gr.Textbox(label="Status", interactive=False)
+            
+            with gr.Row():
+                login_btn = gr.Button("🚀 Login", variant="primary", scale=1)
+                show_signup_btn = gr.Button("📝 Create Account", scale=1)
+        
+        
+        with gr.Column(visible=False) as signup_page:
+            gr.Markdown("## 📝 Create New Account")
+            
+            signup_username = gr.Textbox(
+                label="👤 Username",
+                placeholder="Choose a username (min 3 characters)"
+            )
+            
+            signup_password = gr.Textbox(
+                label="🔒 Password",
+                placeholder="Choose a password (min 6 characters)",
+                type="password"
+            )
+            
+            signup_confirm = gr.Textbox(
+                label="🔒 Confirm Password",
+                placeholder="Re-enter your password",
+                type="password"
+            )
+            
+            signup_message = gr.Textbox(label="Status", interactive=False)
+            
+            with gr.Row():
+                signup_btn = gr.Button("✅ Create Account", variant="primary", scale=1)
+                show_login_btn = gr.Button("◀️ Back to Login", scale=1)
+        
+        
+        
+        with gr.Column(visible=False) as dashboard_page:
+            with gr.Row():
+                gr.Markdown("## 📊 Task Dashboard")
+                logout_btn = gr.Button("🚪 Logout", variant="stop", scale=0)
+            
+            
+            tasks_display = gr.Markdown("Loading tasks...")
+            
+            refresh_btn = gr.Button("🔄 Refresh Tasks", variant="secondary")
+            
+            with gr.Accordion("➕ Add New Task", open=True):
+                task_title = gr.Textbox(
+                    label="📌 Task Title",
+                    placeholder="E.g., Complete project report"
+                )
+                
+                task_description = gr.Textbox(
+                    label="📝 Description",
+                    placeholder="Add details about this task...",
+                    lines=3
+                )
+                
+                with gr.Row():
+                    task_category = gr.Dropdown(
+                        label="📂 Category",
+                        choices=["Work", "Personal", "Study", "Meeting", "Shopping", "Health", "Other"],
+                        value="Personal"
+                    )
+                    
+                    task_priority = gr.Dropdown(
+                        label="⚡ Priority",
+                        choices=["High", "Medium", "Low"],
+                        value="Medium"
+                    )
+                
+                task_due_date = gr.Textbox(
+                    label="📅 Due Date",
+                    placeholder="E.g., 2024-12-31 or Tomorrow"
+                )
+                
+                add_task_message = gr.Textbox(label="Status", interactive=False)
+                add_task_btn = gr.Button("➕ Add Task", variant="primary")
+            
+            
+            with gr.Accordion("⚙️ Task Actions", open=False):
+                action_task_id = gr.Number(
+                    label="🔢 Task ID",
+                    placeholder="Enter task number",
+                    precision=0
+                )
+                
+                with gr.Row():
+                    complete_btn = gr.Button("✅ Mark Complete", variant="primary")
+                    delete_btn = gr.Button("🗑️ Delete Task", variant="stop")
+                
+                action_message = gr.Textbox(label="Status", interactive=False)
+        
+        
+        show_signup_btn.click(
+            fn=lambda: (gr.update(visible=False), gr.update(visible=True)),
+            outputs=[login_page, signup_page]
+        )
+        
+        show_login_btn.click(
+            fn=lambda: (gr.update(visible=True), gr.update(visible=False)),
+            outputs=[login_page, signup_page]
+        )
+        
+        
+        signup_btn.click(
+            fn=signup_user,
+            inputs=[signup_username, signup_password, signup_confirm],
+            outputs=[signup_message, login_page, signup_page, dashboard_page]
+        )
+        
+        
+        login_btn.click(
+            fn=login_user,
+            inputs=[login_username, login_password],
+            outputs=[login_message, login_page, signup_page, dashboard_page]
+        ).then(
+            fn=refresh_tasks,
+            outputs=tasks_display
+        )
+        
+        
+        logout_btn.click(
+            fn=logout_user,
+            outputs=[login_page, signup_page, dashboard_page, login_message]
+        )
+        
+        
+        add_task_btn.click(
+            fn=add_new_task,
+            inputs=[task_title, task_description, task_category, task_priority, task_due_date],
+            outputs=[add_task_message, tasks_display]
+        )
+        
+        complete_btn.click(
+            fn=mark_task_as_complete,
+            inputs=[action_task_id],
+            outputs=[action_message, tasks_display]
+        )
+        
+        delete_btn.click(
+            fn=delete_task_by_id,
+            inputs=[action_task_id],
+            outputs=[action_message, tasks_display]
+        )
+        
+        refresh_btn.click(
+            fn=refresh_tasks,
+            outputs=tasks_display
+        )
+        
+        
+        gr.HTML("""
+            <div style="text-align: center; margin-top: 30px; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                <p><strong>💼 Internship Project</strong></p>
+                <p>Mobile App Development Task | To-Do List Application</p>
+                <p>Technology: Python + Gradio | Data Storage: JSON-based</p>
+            </div>
+        """)
+    
+    return app
+
+
+if __name__ == "__main__":
+    print("=" * 70)
+    print("🚀 LAUNCHING SMART TO-DO APP")
+    print("=" * 70)
+    print("📱 Mobile Prototype for Internship Task")
+    print("🔧 Initializing Database...")
+    print("🎨 Creating UI Interface...")
+    print("=" * 70)
+    
+    app = create_app()
+    
+    
+    app.launch(
+        share=True,
+        show_error=True,
+        inbrowser=False
+    )
