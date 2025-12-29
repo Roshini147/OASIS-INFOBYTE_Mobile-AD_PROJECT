@@ -1,0 +1,531 @@
+import gradio as gr
+from typing import List, Dict, Tuple
+class QuizEngine:
+    """
+    Backend quiz engine - simulates Java quiz management logic
+    Handles questions, answers, scoring, and navigation
+    """
+    
+    def __init__(self):
+        """Initialize quiz with questions and setup"""
+        self.questions = self._load_questions()
+        self.current_question_index = 0
+        self.score = 0
+        self.total_questions = len(self.questions)
+        self.user_answers = []
+        self.quiz_completed = False
+    
+    def _load_questions(self) -> List[Dict]:
+        """
+        Load quiz questions - simulates loading from resources
+        In Android, this would be from strings.xml or database
+        """
+        return [
+            {
+                "question": "What is the capital of France?",
+                "options": ["London", "Berlin", "Paris", "Madrid"],
+                "correct_answer": "Paris"
+            },
+            {
+                "question": "Which planet is known as the Red Planet?",
+                "options": ["Venus", "Mars", "Jupiter", "Saturn"],
+                "correct_answer": "Mars"
+            },
+            {
+                "question": "Who painted the Mona Lisa?",
+                "options": ["Vincent van Gogh", "Pablo Picasso", "Leonardo da Vinci", "Michelangelo"],
+                "correct_answer": "Leonardo da Vinci"
+            },
+            {
+                "question": "What is the largest ocean on Earth?",
+                "options": ["Atlantic Ocean", "Indian Ocean", "Arctic Ocean", "Pacific Ocean"],
+                "correct_answer": "Pacific Ocean"
+            },
+            {
+                "question": "In which year did World War II end?",
+                "options": ["1943", "1944", "1945", "1946"],
+                "correct_answer": "1945"
+            },
+            {
+                "question": "What is the smallest country in the world?",
+                "options": ["Monaco", "Vatican City", "San Marino", "Liechtenstein"],
+                "correct_answer": "Vatican City"
+            },
+            {
+                "question": "Which element has the chemical symbol 'O'?",
+                "options": ["Gold", "Oxygen", "Osmium", "Silver"],
+                "correct_answer": "Oxygen"
+            },
+            {
+                "question": "Who wrote 'Romeo and Juliet'?",
+                "options": ["Charles Dickens", "William Shakespeare", "Jane Austen", "Mark Twain"],
+                "correct_answer": "William Shakespeare"
+            },
+            {
+                "question": "What is the tallest mammal in the world?",
+                "options": ["Elephant", "Giraffe", "Whale", "Camel"],
+                "correct_answer": "Giraffe"
+            },
+            {
+                "question": "Which country is home to the kangaroo?",
+                "options": ["New Zealand", "South Africa", "Australia", "Brazil"],
+                "correct_answer": "Australia"
+            }
+        ]
+    
+    def get_current_question(self) -> Dict:
+        """Get the current question data"""
+        if self.current_question_index < self.total_questions:
+            return self.questions[self.current_question_index]
+        return None
+    
+    def check_answer(self, selected_answer: str) -> Tuple[bool, str]:
+        """
+        Check if the selected answer is correct
+        Returns: (is_correct, feedback_message)
+        """
+        if not selected_answer:
+            return False, "⚠️ Please select an answer!"
+        
+        current_q = self.get_current_question()
+        if not current_q:
+            return False, "Quiz completed!"
+        
+        is_correct = selected_answer == current_q["correct_answer"]
+        
+        if is_correct:
+            self.score += 1
+            feedback = f"✅ Correct! The answer is {current_q['correct_answer']}"
+        else:
+            feedback = f"❌ Incorrect! The correct answer is {current_q['correct_answer']}"
+        
+        self.user_answers.append({
+            "question": current_q["question"],
+            "selected": selected_answer,
+            "correct": current_q["correct_answer"],
+            "is_correct": is_correct
+        })
+        
+        return is_correct, feedback
+    
+    def next_question(self) -> bool:
+        """
+        Move to next question
+        Returns: True if more questions available, False if quiz completed
+        """
+        self.current_question_index += 1
+        
+        if self.current_question_index >= self.total_questions:
+            self.quiz_completed = True
+            return False
+        
+        return True
+    
+    def get_progress(self) -> str:
+        """Get current progress string"""
+        return f"Question {self.current_question_index + 1} of {self.total_questions}"
+    
+    def get_final_score(self) -> str:
+        """Generate final score report"""
+        percentage = (self.score / self.total_questions) * 100
+        
+        if percentage >= 80:
+            grade = "Excellent! 🌟"
+        elif percentage >= 60:
+            grade = "Good Job! 👍"
+        elif percentage >= 40:
+            grade = "Not Bad! 📚"
+        else:
+            grade = "Keep Practicing! 💪"
+        
+        report = f"""
+╔════════════════════════════════════╗
+║          QUIZ COMPLETED!           ║
+╚════════════════════════════════════╝
+
+📊 YOUR FINAL SCORE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✓ Correct Answers: {self.score}
+✗ Incorrect Answers: {self.total_questions - self.score}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 Total Score: {self.score}/{self.total_questions}
+📈 Percentage: {percentage:.1f}%
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🏆 {grade}
+
+Thank you for taking the quiz!
+        """
+        
+        return report
+    
+    def reset_quiz(self):
+        """Reset quiz to initial state"""
+        self.current_question_index = 0
+        self.score = 0
+        self.user_answers = []
+        self.quiz_completed = False
+
+
+
+quiz_engine = QuizEngine()
+
+def create_quiz_ui():
+    """
+    Creates mobile-style quiz interface
+    Simulates Android XML layout design
+    """
+    
+    
+    custom_css = """
+    .gradio-container {
+        max-width: 500px !important;
+        margin: auto !important;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+        padding: 25px !important;
+        border-radius: 20px !important;
+    }
+    
+    .app-header {
+        text-align: center;
+        color: white;
+        margin-bottom: 20px;
+    }
+    
+    .app-title {
+        font-size: 36px;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        margin-bottom: 5px;
+    }
+    
+    .app-subtitle {
+        font-size: 14px;
+        opacity: 0.9;
+    }
+    
+    .question-card {
+        background: white !important;
+        border-radius: 15px !important;
+        padding: 25px !important;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+        margin-bottom: 15px !important;
+    }
+    
+    .progress-text {
+        text-align: center;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        background: rgba(255,255,255,0.2);
+        padding: 10px;
+ .app-header {
+        text-align: center;
+        color: white;
+        margin-bottom: 20px;
+    }
+    
+    .app-title {
+        font-size: 36px;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        margin-bottom: 5px;
+    }
+    
+    .app-subtitle {
+        font-size: 14px;
+        opacity: 0.9;
+    }
+    
+    .question-card {
+        background: white !important;
+        border-radius: 15px !important;
+        padding: 25px !important;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+        margin-bottom: 15px !important;
+    }
+    
+    .progress-text {
+        text-align: center;
+        color: white;
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 15px;
+        background: rgba(255,255,255,0.2);
+        padding: 10px;
+        border-radius: 10px;
+    }
+    
+    .question-text {
+        font-size: 20px !important;
+        font-weight: 700 !important;
+        color: #2d3748 !important;
+        margin-bottom: 20px !important;
+        line-height: 1.6 !important;
+    }
+    
+    .feedback-box {
+        background: #f7fafc !important;
+        border-radius: 12px !important;
+        padding: 15px !important;
+        font-size: 16px !important;
+        font-weight: 600 !important;
+        text-align: center !important;
+        min-height: 60px !important;
+        border: 2px solid #e2e8f0 !important;
+    }
+    
+    .score-box {
+        background: white !important;
+        border-radius: 15px !important;
+        padding: 25px !important;
+        font-size: 15px !important;
+        font-family: monospace !important;
+        white-space: pre-wrap !important;
+        box-shadow: 0 8px 16px rgba(0,0,0,0.2) !important;
+        color: #2d3748 !important;
+        line-height: 1.8 !important;
+    }
+    
+    button {
+        border-radius: 12px !important;
+        font-size: 18px !important;
+        font-weight: bold !important;
+        padding: 15px 30px !important;
+        transition: all 0.3s !important;
+        border: none !important;
+        color: white !important;
+    }
+    
+    .submit-btn button {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%) !important;
+        box-shadow: 0 4px 15px rgba(245, 87, 108, 0.4) !important;
+    }
+    
+    .submit-btn button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(245, 87, 108, 0.6) !important;
+    }
+    
+    .next-btn button {
+        background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%) !important;
+        box-shadow: 0 4px 15px rgba(79, 172, 254, 0.4) !important;
+    }
+    
+    .next-btn button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(79, 172, 254, 0.6) !important;
+    }
+    
+    .reset-btn button {
+        background: linear-gradient(135deg, #fa709a 0%, #fee140 100%) !important;
+        box-shadow: 0 4px 15px rgba(250, 112, 154, 0.4) !important;
+    }
+    
+    .reset-btn button:hover {
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 20px rgba(250, 112, 154, 0.6) !important;
+    }
+    
+    label[for*="radio"] {
+        font-size: 16px !important;
+        padding: 12px !important;
+        margin: 8px 0 !important;
+        border-radius: 8px !important;
+        background: #f7fafc !important;
+        border: 2px solid #e2e8f0 !important;
+        transition: all 0.2s !important;
+    }
+    
+    label[for*="radio"]:hover {
+        background: #edf2f7 !important;
+        border-color: #667eea !important;
+    }
+    """
+    
+    with gr.Blocks(css=custom_css, title="Quiz Application") as app:
+        
+        
+        question_state = gr.State(0)
+        score_state = gr.State(0)
+        
+        
+        gr.HTML("""
+            <div class="app-header">
+                <div class="app-title">🎯 Quiz Application</div>
+                <div class="app-subtitle">Test Your General Knowledge</div>
+            </div>
+        """)
+       
+        progress_text = gr.HTML(
+            value=f'<div class="progress-text">📚 {quiz_engine.get_progress()}</div>'
+        )
+        
+      
+        with gr.Group(elem_classes="question-card"):
+            question_display = gr.Markdown(
+                value=f"**{quiz_engine.get_current_question()['question']}**",
+                elem_classes="question-text"
+            )
+            
+            answer_options = gr.Radio(
+                choices=quiz_engine.get_current_question()["options"],
+                label="Select your answer:",
+                interactive=True
+            )
+        
+       
+        feedback_display = gr.Textbox(
+            label="",
+            value="Select an answer and click Submit",
+            interactive=False,
+            elem_classes="feedback-box"
+        )
+        
+        
+        with gr.Row():
+            with gr.Column(elem_classes="submit-btn"):
+                submit_btn = gr.Button("✓ Submit Answer", variant="primary", size="lg")
+            with gr.Column(elem_classes="next-btn"):
+                next_btn = gr.Button("→ Next Question", variant="secondary", size="lg", visible=False)
+        
+       
+        score_display = gr.Textbox(
+            label="",
+            visible=False,
+            interactive=False,
+            elem_classes="score-box"
+        )
+        
+       
+        with gr.Row():
+            with gr.Column(elem_classes="reset-btn"):
+                reset_btn = gr.Button("🔄 Restart Quiz", visible=False, size="lg")
+        
+      
+        gr.HTML("""
+            <div style='text-align: center; margin-top: 20px; color: white; font-size: 12px;'>
+                📱 Mobile App Development Internship Project<br>
+                Developed with ❤️ using Python & Gradio
+            </div>
+        """)
+        def on_submit_answer(selected_answer):
+            """Handle answer submission - simulates onClick in Android"""
+            is_correct, feedback = quiz_engine.check_answer(selected_answer)
+            
+            return {
+                feedback_display: feedback,
+                submit_btn: gr.update(visible=False),
+                next_btn: gr.update(visible=True)
+            }
+        
+        def on_next_question():
+            """Handle next question navigation"""
+            has_more = quiz_engine.next_question()
+            
+            if not has_more:
+                
+                final_score = quiz_engine.get_final_score()
+                return {
+                    question_display: gr.update(visible=False),
+                    answer_options: gr.update(visible=False),
+                    feedback_display: gr.update(visible=False),
+                    submit_btn: gr.update(visible=False),
+                    next_btn: gr.update(visible=False),
+                    progress_text: gr.update(visible=False),
+                    score_display: gr.update(value=final_score, visible=True),
+                    reset_btn: gr.update(visible=True)
+                }
+            else:
+                
+                current_q = quiz_engine.get_current_question()
+                return {
+                    question_display: f"**{current_q['question']}**",
+                    answer_options: gr.update(choices=current_q["options"], value=None),
+                    feedback_display: "Select an answer and click Submit",
+                    progress_text: f'<div class="progress-text">📚 {quiz_engine.get_progress()}</div>',
+                    submit_btn: gr.update(visible=True),
+                    next_btn: gr.update(visible=False)
+                }
+        
+        def on_reset_quiz():
+            """Handle quiz reset"""
+            quiz_engine.reset_quiz()
+            current_q = quiz_engine.get_current_question()
+            
+            return {
+                question_display: gr.update(value=f"**{current_q['question']}**", visible=True),
+                answer_options: gr.update(choices=current_q["options"], value=None, visible=True),
+                feedback_display: gr.update(value="Select an answer and click Submit", visible=True),
+                progress_text: gr.update(value=f'<div class="progress-text">📚 {quiz_engine.get_progress()}</div>', visible=True),
+                submit_btn: gr.update(visible=True),
+                next_btn: gr.update(visible=False),
+                score_display: gr.update(visible=False),
+                reset_btn: gr.update(visible=False)
+            }
+        
+        
+        submit_btn.click(
+            fn=on_submit_answer,
+            inputs=[answer_options],
+            outputs=[feedback_display, submit_btn, next_btn]
+        )
+        
+        next_btn.click(
+            fn=on_next_question,
+            inputs=[],
+            outputs=[
+                question_display, 
+                answer_options, 
+                feedback_display, 
+                progress_text,
+                submit_btn, 
+                next_btn,
+                score_display,
+                reset_btn
+            ]
+        )
+        
+        reset_btn.click(
+            fn=on_reset_quiz,
+            inputs=[],
+            outputs=[
+                question_display,
+                answer_options,
+                feedback_display,
+                progress_text,
+                submit_btn,
+                next_btn,
+                score_display,
+                reset_btn
+            ]
+        )
+    
+    return app
+
+if __name__ == "__main__":
+    print("=" * 60)
+    print("🎯 QUIZ APPLICATION - MOBILE PROTOTYPE")
+    print("=" * 60)
+    print("📱 Launching mobile-style quiz interface...")
+    print("📚 Loading 10 General Knowledge questions...")
+    print("🌐 Generating shareable link...")
+    print("=" * 60)
+    
+    
+    quiz_app = create_quiz_ui()
+    
+    
+    quiz_app.launch(
+        share=True,
+        show_error=True,
+        quiet=False
+    )
+    
+    print("✅ Quiz application is now running!")
+    print("🔗 Use the public link above to access your quiz")
+    print("🎓 Good luck with your internship evaluation!")
+    print("=" * 60)
+        border-radius: 10px;
+    }
